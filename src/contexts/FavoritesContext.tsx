@@ -8,17 +8,22 @@ import {
 } from 'react'
 
 interface FavoritesContextValue {
-  favorites: number[]
-  isFavorite: (id: number) => boolean
-  toggleFavorite: (id: number) => void
+  favorites: string[]
+  isFavorite: (id: string) => boolean
+  toggleFavorite: (id: string) => void
 }
 
 const STORAGE_KEY = 'mobihouse-favorites'
 
-function loadFavorites(): number[] {
+function loadFavorites(): string[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as number[]) : []
+    if (!raw) return []
+
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+
+    return parsed.map((item) => String(item))
   } catch {
     return []
   }
@@ -27,14 +32,14 @@ function loadFavorites(): number[] {
 const FavoritesContext = createContext<FavoritesContextValue | null>(null)
 
 export function FavoritesProvider({ children }: { children: ReactNode }) {
-  const [favorites, setFavorites] = useState<number[]>(loadFavorites)
+  const [favorites, setFavorites] = useState<string[]>(loadFavorites)
 
   const isFavorite = useCallback(
-    (id: number) => favorites.includes(id),
+    (id: string) => favorites.includes(id),
     [favorites],
   )
 
-  const toggleFavorite = useCallback((id: number) => {
+  const toggleFavorite = useCallback((id: string) => {
     setFavorites((prev) => {
       const next = prev.includes(id)
         ? prev.filter((fav) => fav !== id)

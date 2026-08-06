@@ -1,25 +1,31 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { HiOutlineArrowRightOnRectangle } from 'react-icons/hi2'
 import { MobihouseLogo } from './MobihouseLogo'
 import { UserMenu } from './UserMenu'
 import { useAuth } from '../contexts/AuthContext'
 
-const navItems = [
+type NavItem = { to: string; label: string; end?: boolean }
+
+const publicNavItems: NavItem[] = [
   { to: '/', label: 'Inicio', end: true },
   { to: '/propiedades', label: 'Propiedades' },
   { to: '/mapa', label: 'Mapa Interactivo' },
+]
+
+const authNavItems: NavItem[] = [
   { to: '/favoritos', label: 'Favoritos' },
   { to: '/mensajes', label: 'Mensajes' },
   { to: '/configuracion', label: 'Configuración' },
 ]
 
 export function Navbar() {
-  const { logout } = useAuth()
+  const { isAuthenticated, logout } = useAuth()
   const navigate = useNavigate()
 
+  const navItems = isAuthenticated ? [...publicNavItems, ...authNavItems] : publicNavItems
+
   const handleLogout = () => {
-    logout()
-    navigate('/login')
+    void logout().then(() => navigate('/'))
   }
 
   return (
@@ -58,15 +64,34 @@ export function Navbar() {
         </nav>
 
         <div className="flex flex-1 items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="btn-animated flex items-center gap-1.5 px-1 py-1 text-sm font-medium text-[#666666] hover:text-red-600"
-          >
-            <HiOutlineArrowRightOnRectangle className="h-4 w-4" />
-            Cerrar Sesión
-          </button>
-          <UserMenu />
+          {isAuthenticated ? (
+            <>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="btn-animated flex items-center gap-1.5 px-1 py-1 text-sm font-medium text-[#666666] hover:text-red-600"
+              >
+                <HiOutlineArrowRightOnRectangle className="h-4 w-4" />
+                Cerrar Sesión
+              </button>
+              <UserMenu />
+            </>
+          ) : (
+            <>
+              <Link
+                to="/login"
+                className="btn-animated px-1 py-1 text-sm font-medium text-[#666666] hover:text-[#004d40]"
+              >
+                Ingresar
+              </Link>
+              <Link
+                to="/registro"
+                className="btn-animated rounded-lg bg-[#004d40] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#00695c]"
+              >
+                Crear cuenta
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>

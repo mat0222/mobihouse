@@ -1,14 +1,11 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { MobihouseLogo } from '../components/MobihouseLogo'
 import { useAuth } from '../contexts/AuthContext'
 import { isStrongEnoughPassword } from '../lib/security'
 
-const MAX_ATTEMPTS = 5
-const LOCKOUT_MS = 60_000
-
-export function LoginPage() {
-  const { login, isAuthenticated, loading } = useAuth()
+export function RegisterPage() {
+  const { register, isAuthenticated, loading } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from =
@@ -18,22 +15,13 @@ export function LoginPage() {
     typeof (location.state as { from?: unknown }).from === 'string'
       ? (location.state as { from: string }).from
       : '/'
+
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [attempts, setAttempts] = useState(0)
-  const [lockedUntil, setLockedUntil] = useState(0)
-  const [now, setNow] = useState(Date.now())
-  const lockTimer = useRef<number | null>(null)
-
-  useEffect(() => {
-    if (lockedUntil <= Date.now()) return
-    lockTimer.current = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => {
-      if (lockTimer.current) window.clearInterval(lockTimer.current)
-    }
-  }, [lockedUntil])
 
   if (loading) {
     return (
@@ -47,42 +35,30 @@ export function LoginPage() {
     return <Navigate to={from} replace />
   }
 
-  const locked = lockedUntil > now
-  const lockSeconds = Math.max(0, Math.ceil((lockedUntil - now) / 1000))
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
-
-    if (locked) {
-      setError(`Demasiados intentos. Esperá ${lockSeconds}s e intentá de nuevo.`)
-      return
-    }
 
     if (!isStrongEnoughPassword(password)) {
       setError('La contraseña debe tener al menos 8 caracteres.')
       return
     }
 
+    if (password !== confirmPassword) {
+      setError('Las contraseñas no coinciden.')
+      return
+    }
+
     setSubmitting(true)
     try {
-      await login(email, password)
-      setAttempts(0)
+      await register(name, email, password)
       navigate(from, { replace: true })
-    } catch (loginError) {
-      const nextAttempts = attempts + 1
-      setAttempts(nextAttempts)
-      if (nextAttempts >= MAX_ATTEMPTS) {
-        setLockedUntil(Date.now() + LOCKOUT_MS)
-        setAttempts(0)
-        setError('Demasiados intentos fallidos. Esperá 1 minuto para reintentar.')
-      } else {
-        setError(
-          loginError instanceof Error
-            ? loginError.message
-            : 'No se pudo iniciar sesión.',
-        )
-      }
+    } catch (registerError) {
+      setError(
+        registerError instanceof Error
+          ? registerError.message
+          : 'No se pudo crear la cuenta.',
+      )
     } finally {
       setSubmitting(false)
     }
@@ -93,13 +69,28 @@ export function LoginPage() {
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
         <div className="mb-8 flex flex-col items-center text-center">
           <MobihouseLogo className="mb-3 h-12 w-12 text-green-600" />
-          <h1 className="text-2xl font-bold text-slate-900">MobiHouse</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Crear cuenta</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Ingresá a tu cuenta para contactar, guardar favoritos y más
+            Registrate para guardar favoritos, contactar agentes y más
           </p>
         </div>
 
         <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4" autoComplete="on">
+          <div>
+            <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-slate-700">
+              Nombre
+            </label>
+            <input
+              id="name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoComplete="name"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
+              required
+            />
+          </div>
+
           <div>
             <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-700">
               Correo electrónico
@@ -124,7 +115,26 @@ export function LoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
+              autoComplete="new-password"
+              minLength={8}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
+              required
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="confirmPassword"
+              className="mb-1.5 block text-sm font-medium text-slate-700"
+            >
+              Confirmar contraseña
+            </label>
+            <input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
               minLength={8}
               className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
               required
@@ -137,30 +147,21 @@ export function LoginPage() {
 
           <button
             type="submit"
-            disabled={submitting || locked}
+            disabled={submitting}
             className="btn-animated btn-primary w-full rounded-lg bg-cyan-500 py-3 text-sm font-semibold text-white hover:bg-cyan-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {submitting ? 'Ingresando...' : locked ? `Bloqueado (${lockSeconds}s)` : 'Iniciar sesión'}
+            {submitting ? 'Creando cuenta...' : 'Crear cuenta'}
           </button>
         </form>
 
         <p className="mt-6 text-center text-sm text-slate-500">
-          ¿No tenés cuenta?{' '}
+          ¿Ya tenés cuenta?{' '}
           <Link
-            to="/registro"
+            to="/login"
             state={{ from }}
             className="font-medium text-cyan-600 hover:text-cyan-700"
           >
-            Crear cuenta
-          </Link>
-        </p>
-        <p className="mt-3 text-center text-xs text-slate-400">
-          Acceso protegido con Firebase Authentication. Las contraseñas nunca se guardan en el
-          navegador.
-        </p>
-        <p className="mt-4 text-center">
-          <Link to="/" className="text-xs text-slate-400 hover:text-slate-600">
-            ← Volver al sitio
+            Iniciar sesión
           </Link>
         </p>
       </div>

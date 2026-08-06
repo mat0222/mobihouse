@@ -19,11 +19,19 @@ interface GrokChatRequest {
   properties?: PropertySummaryPayload[]
 }
 
-export async function sendGrokMessage(request: GrokChatRequest): Promise<string> {
+export async function sendGrokMessage(
+  request: GrokChatRequest,
+  idToken: string,
+): Promise<string> {
+  if (!idToken) {
+    throw new Error('Sesión inválida. Volvé a iniciar sesión.')
+  }
+
   const response = await fetch('/api/grok/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
     },
     body: JSON.stringify(request),
   })

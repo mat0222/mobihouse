@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && userDoc().role == 'admin';
+    }
+
+    function isAdminEmail() {
+      return request.auth.token.email == 'andres@mobihouse.com';
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+
+      // El usuario solo puede crear su propio perfil.
+      // Solo emails admin autorizados pueden nacer con role == 'admin'.
+      allow create: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasAll(['id', 'name', 'email', 'avatar', 'role'])
+        && request.resource.data.id == userId
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role in ['user', 'admin']
+        && (
+          request.resource.data.role == 'user'
+          || isAdminEmail()
+        );
+
+      // No permitir auto-escalada de privilegios.
+      allow update: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.id == resource.data.id;
+
+      allow delete: if false;
+    }
+
+    match /properties/{propertyId} {
+      // Catálogo público: cualquiera puede ver propiedades; solo admin modifica.
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}

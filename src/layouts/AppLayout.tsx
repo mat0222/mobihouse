@@ -4,10 +4,14 @@ import { ChatWidget } from '../components/ChatWidget'
 import { useAuth } from '../contexts/AuthContext'
 
 export function AppLayout() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, loading } = useAuth()
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#f5f7fa] text-slate-500">
+        Cargando...
+      </div>
+    )
   }
 
   return (
@@ -16,7 +20,7 @@ export function AppLayout() {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <Outlet />
       </div>
-      <ChatWidget />
+      {isAuthenticated && <ChatWidget />}
     </div>
   )
 }

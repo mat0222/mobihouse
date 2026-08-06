@@ -4,7 +4,7 @@ import { useProperties } from '../contexts/PropertiesContext'
 
 export function MapPage() {
   const { properties } = useProperties()
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const selected = properties.find((p) => p.id === selectedId)
 
   return (

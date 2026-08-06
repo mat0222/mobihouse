@@ -15,10 +15,18 @@ const adminNav = [
 ]
 
 export function AdminLayout() {
-  const { isAuthenticated, isAdmin } = useAuth()
+  const { isAuthenticated, isAdmin, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-100 text-slate-500">
+        Verificando permisos...
+      </div>
+    )
+  }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/login" replace state={{ from: '/admin' }} />
   }
 
   if (!isAdmin) {

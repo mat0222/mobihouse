@@ -15,7 +15,7 @@ const assistantAvatar =
   'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=64&h=64&fit=crop&crop=face'
 
 export function ChatWidget() {
-  const { user } = useAuth()
+  const { user, getIdToken } = useAuth()
   const { properties } = useProperties()
   const firstName = user?.name.split(' ')[0] ?? 'Usuario'
 
@@ -69,19 +69,27 @@ export function ChatWidget() {
           content: message.text,
         }))
 
-      const reply = await sendGrokMessage({
-        messages: history,
-        userName: user?.name ?? firstName,
-        properties: properties.map((property) => ({
-          title: property.title,
-          price: property.price,
-          badge: property.badge,
-          bedrooms: property.bedrooms,
-          bathrooms: property.bathrooms,
-          area: property.area,
-          type: property.type,
-        })),
-      })
+      const token = await getIdToken()
+      if (!token) {
+        throw new Error('Sesión inválida. Volvé a iniciar sesión.')
+      }
+
+      const reply = await sendGrokMessage(
+        {
+          messages: history,
+          userName: user?.name ?? firstName,
+          properties: properties.map((property) => ({
+            title: property.title,
+            price: property.price,
+            badge: property.badge,
+            bedrooms: property.bedrooms,
+            bathrooms: property.bathrooms,
+            area: property.area,
+            type: property.type,
+          })),
+        },
+        token,
+      )
 
       setMessages((prev) => [
         ...prev,

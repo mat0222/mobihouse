@@ -1,7 +1,8 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { HiOutlineHeart, HiHeart } from 'react-icons/hi2'
 import { MdBed, MdBathtub, MdSquareFoot } from 'react-icons/md'
 import type { Property } from '../data/properties'
+import { useAuth } from '../contexts/AuthContext'
 import { useFavorites } from '../contexts/FavoritesContext'
 
 const badgeStyles: Record<Property['badge'], string> = {
@@ -11,8 +12,19 @@ const badgeStyles: Record<Property['badge'], string> = {
 }
 
 export function PropertyCard({ property }: { property: Property }) {
+  const { isAuthenticated } = useAuth()
   const { isFavorite, toggleFavorite } = useFavorites()
-  const favorited = isFavorite(property.id)
+  const navigate = useNavigate()
+  const location = useLocation()
+  const favorited = isAuthenticated && isFavorite(property.id)
+
+  const handleFavorite = () => {
+    if (!isAuthenticated) {
+      navigate('/login', { state: { from: location.pathname } })
+      return
+    }
+    toggleFavorite(property.id)
+  }
 
   return (
     <article className="overflow-hidden rounded-xl bg-white shadow-sm">
@@ -29,11 +41,17 @@ export function PropertyCard({ property }: { property: Property }) {
         </span>
         <button
           type="button"
-          onClick={() => toggleFavorite(property.id)}
+          onClick={handleFavorite}
           className={`btn-animated absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 hover:bg-white hover:shadow-md ${
             favorited ? 'text-red-500' : 'text-slate-600 hover:text-red-500'
           }`}
-          aria-label={favorited ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+          aria-label={
+            !isAuthenticated
+              ? 'Iniciá sesión para guardar favoritos'
+              : favorited
+                ? 'Quitar de favoritos'
+                : 'Agregar a favoritos'
+          }
         >
           {favorited ? (
             <HiHeart className="h-4 w-4" />

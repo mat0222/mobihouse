@@ -11,7 +11,11 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
-      grokApiPlugin(env.XAI_API_KEY ?? '', env.XAI_MODEL || 'grok-3-mini-fast'),
+      grokApiPlugin(
+        env.XAI_API_KEY ?? '',
+        env.XAI_MODEL || 'grok-3-mini-fast',
+        env.VITE_FIREBASE_API_KEY ?? '',
+      ),
     ],
     optimizeDeps: {
       include: ['leaflet', 'react-leaflet'],

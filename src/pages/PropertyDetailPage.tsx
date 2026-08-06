@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   HiOutlineArrowLeft,
   HiOutlineArrowLongRight,
@@ -14,23 +14,12 @@ import {
   MdApartment,
   MdBathtub,
   MdBed,
-  MdElevator,
-  MdFitnessCenter,
-  MdPool,
-  MdSecurity,
   MdSquareFoot,
 } from 'react-icons/md'
 import { PropertyMapView } from '../components/PropertyMapView'
 import { useAuth } from '../contexts/AuthContext'
 import { useProperties } from '../contexts/PropertiesContext'
-import type { Amenity, Property } from '../data/properties'
-
-const amenityIcons: Record<Amenity, typeof MdPool> = {
-  Piscina: MdPool,
-  Gimnasio: MdFitnessCenter,
-  Ascensor: MdElevator,
-  'Seguridad 24/7': MdSecurity,
-}
+import type { Property } from '../data/properties'
 
 const badgeStyles: Record<Property['badge'], string> = {
   NUEVO: 'bg-blue-500 text-white',
@@ -42,9 +31,11 @@ type ModalType = 'info' | 'visit' | null
 
 export function PropertyDetailPage() {
   const { id } = useParams()
-  const { user } = useAuth()
-  const { properties } = useProperties()
-  const property = properties.find((item) => item.id === Number(id))
+  const { user, isAuthenticated } = useAuth()
+  const { properties, loading } = useProperties()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const property = properties.find((item) => item.id === id)
   const [activeImage, setActiveImage] = useState(0)
   const [modal, setModal] = useState<ModalType>(null)
   const [successMessage, setSuccessMessage] = useState('')
@@ -55,6 +46,20 @@ export function PropertyDetailPage() {
     phone: '',
     notes: '',
   })
+
+  const requireAuth = () => {
+    if (isAuthenticated) return true
+    navigate('/login', { state: { from: location.pathname } })
+    return false
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center bg-[#f5f7fa] p-6">
+        <p className="text-slate-500">Cargando propiedad...</p>
+      </div>
+    )
+  }
 
   if (!property) {
     return <Navigate to="/propiedades" replace />
@@ -252,17 +257,29 @@ export function PropertyDetailPage() {
           <p className="mt-6 text-sm leading-relaxed text-slate-600">{property.description}</p>
 
           <div className="mt-6">
-            <h2 className="text-lg font-semibold text-slate-900">Amenities</h2>
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              {property.amenities.map((amenity) => {
-                const Icon = amenityIcons[amenity]
-                return (
-                  <div key={amenity} className="flex items-center gap-2 text-sm text-slate-600">
-                    <Icon className="h-4 w-4 text-[#004d40]" />
-                    {amenity}
-                  </div>
-                )
-              })}
+            <h2 className="text-lg font-semibold text-slate-900">Características y servicios</h2>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {(
+                [
+                  ['Patio', property.features.patio],
+                  ['Pileta', property.features.pileta],
+                  ['Ascensor', property.features.ascensor],
+                  ['Agua', property.features.agua],
+                  ['Gas', property.features.gas],
+                  ['Electricidad', property.features.electricidad],
+                ] as const
+              ).map(([label, value]) => (
+                <div
+                  key={label}
+                  className={`rounded-lg px-3 py-2 text-sm ${
+                    value
+                      ? 'bg-emerald-50 text-emerald-800'
+                      : 'bg-slate-50 text-slate-400 line-through'
+                  }`}
+                >
+                  {value ? `✓ ${label}` : label}
+                </div>
+              ))}
             </div>
           </div>
 
@@ -287,22 +304,32 @@ export function PropertyDetailPage() {
                 <p className="text-sm font-medium text-slate-900">{property.agent.name}</p>
               </div>
               <div className="mt-4 space-y-2">
-                <a
-                  href={`https://wa.me/${property.agent.whatsapp.replace(/\D/g, '')}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn-animated flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!requireAuth()) return
+                    window.open(
+                      `https://wa.me/${property.agent.whatsapp.replace(/\D/g, '')}`,
+                      '_blank',
+                      'noopener,noreferrer',
+                    )
+                  }}
+                  className="btn-animated flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
                 >
                   <FaWhatsapp className="h-4 w-4 text-emerald-600" />
                   WhatsApp
-                </a>
-                <a
-                  href={`mailto:${property.agent.email}?subject=Consulta%20sobre%20${encodeURIComponent(property.title)}`}
-                  className="btn-animated flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!requireAuth()) return
+                    window.location.href = `mailto:${property.agent.email}?subject=Consulta%20sobre%20${encodeURIComponent(property.title)}`
+                  }}
+                  className="btn-animated flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
                 >
                   <HiOutlineEnvelope className="h-4 w-4" />
                   Enviar Correo
-                </a>
+                </button>
               </div>
             </div>
           </div>
@@ -310,7 +337,10 @@ export function PropertyDetailPage() {
           <div className="mt-6 space-y-3">
             <button
               type="button"
-              onClick={() => setModal('info')}
+              onClick={() => {
+                if (!requireAuth()) return
+                setModal('info')
+              }}
               className="btn-animated flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-500 py-3.5 text-sm font-semibold text-white hover:bg-cyan-600"
             >
               Solicitar Más Información
@@ -318,11 +348,27 @@ export function PropertyDetailPage() {
             </button>
             <button
               type="button"
-              onClick={() => setModal('visit')}
+              onClick={() => {
+                if (!requireAuth()) return
+                setModal('visit')
+              }}
               className="btn-animated w-full rounded-xl border border-slate-300 bg-white py-3.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
               Programar una Visita
             </button>
+            {!isAuthenticated && (
+              <p className="text-center text-xs text-slate-500">
+                Para contactar o solicitar visitas necesitás{' '}
+                <Link
+                  to="/login"
+                  state={{ from: location.pathname }}
+                  className="font-medium text-cyan-600 hover:text-cyan-700"
+                >
+                  iniciar sesión
+                </Link>
+                .
+              </p>
+            )}
           </div>
         </aside>
       </div>

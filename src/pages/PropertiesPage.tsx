@@ -7,7 +7,7 @@ import { usePropertyFilters } from '../hooks/usePropertyFilters'
 
 export function PropertiesPage() {
   const location = useLocation()
-  const { properties } = useProperties()
+  const { properties, loading, error } = useProperties()
   const { filters, setFilters, filtered } = usePropertyFilters(properties)
 
   useEffect(() => {
@@ -25,7 +25,17 @@ export function PropertiesPage() {
 
       <FilterBar filters={filters} onChange={setFilters} />
 
-      {filtered.length === 0 ? (
+      {error && (
+        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="rounded-xl bg-white p-12 text-center shadow-sm">
+          <p className="text-slate-500">Cargando propiedades desde Firebase...</p>
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="rounded-xl bg-white p-12 text-center shadow-sm">
           <p className="text-slate-500">No hay propiedades que coincidan con los filtros.</p>
         </div>

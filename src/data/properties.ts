@@ -1,6 +1,20 @@
 export type PropertyBadge = 'NUEVO' | 'EN ALQUILER' | 'EN VENTA'
-export type PropertyType = 'Departamento' | 'Casa' | 'Loft' | 'PH'
-export type Amenity = 'Piscina' | 'Gimnasio' | 'Ascensor' | 'Seguridad 24/7'
+export type PropertyType =
+  | 'Departamento'
+  | 'Casa'
+  | 'Loft'
+  | 'PH'
+  | 'Galpón'
+  | 'Local'
+export type Amenity =
+  | 'Piscina'
+  | 'Patio'
+  | 'Ascensor'
+  | 'Agua'
+  | 'Gas'
+  | 'Electricidad'
+  | 'Gimnasio'
+  | 'Seguridad 24/7'
 
 export interface PropertyAgent {
   name: string
@@ -9,8 +23,17 @@ export interface PropertyAgent {
   email: string
 }
 
+export interface PropertyFeatures {
+  patio: boolean
+  pileta: boolean
+  ascensor: boolean
+  agua: boolean
+  gas: boolean
+  electricidad: boolean
+}
+
 export interface Property {
-  id: number
+  id: string
   price: string
   title: string
   badge: PropertyBadge
@@ -25,10 +48,20 @@ export interface Property {
   garages: number
   description: string
   amenities: Amenity[]
+  features: PropertyFeatures
   agent: PropertyAgent
 }
 
 export const MAP_CENTER = { lat: -34.5889, lng: -58.4200 }
+
+export const PROPERTY_TYPES: PropertyType[] = [
+  'Departamento',
+  'Casa',
+  'Loft',
+  'PH',
+  'Galpón',
+  'Local',
+]
 
 export const DEFAULT_AGENT: PropertyAgent = {
   name: 'Andrés García',
@@ -38,12 +71,46 @@ export const DEFAULT_AGENT: PropertyAgent = {
   email: 'andres@mobihouse.com',
 }
 
-export const DEFAULT_AMENITIES: Amenity[] = [
-  'Piscina',
-  'Gimnasio',
-  'Ascensor',
-  'Seguridad 24/7',
-]
+export const DEFAULT_FEATURES: PropertyFeatures = {
+  patio: false,
+  pileta: false,
+  ascensor: false,
+  agua: true,
+  gas: true,
+  electricidad: true,
+}
+
+export const DEFAULT_AMENITIES: Amenity[] = ['Agua', 'Gas', 'Electricidad']
+
+export function featuresFromAmenities(amenities: Amenity[]): PropertyFeatures {
+  return {
+    patio: amenities.includes('Patio'),
+    pileta: amenities.includes('Piscina'),
+    ascensor: amenities.includes('Ascensor'),
+    agua: amenities.includes('Agua'),
+    gas: amenities.includes('Gas'),
+    electricidad: amenities.includes('Electricidad'),
+  }
+}
+
+export function amenitiesFromFeatures(
+  features: PropertyFeatures,
+  extras: Amenity[] = [],
+): Amenity[] {
+  const fromFeatures: Amenity[] = []
+  if (features.patio) fromFeatures.push('Patio')
+  if (features.pileta) fromFeatures.push('Piscina')
+  if (features.ascensor) fromFeatures.push('Ascensor')
+  if (features.agua) fromFeatures.push('Agua')
+  if (features.gas) fromFeatures.push('Gas')
+  if (features.electricidad) fromFeatures.push('Electricidad')
+
+  const keptExtras = extras.filter(
+    (item) => item === 'Gimnasio' || item === 'Seguridad 24/7',
+  )
+
+  return [...fromFeatures, ...keptExtras]
+}
 
 const DEFAULT_DESCRIPTION =
   'Propiedad moderna con excelente ubicación, ambientes luminosos y acabados de calidad. Ideal para quienes buscan confort y conectividad con los principales puntos de la ciudad.'
@@ -52,12 +119,19 @@ export function withPropertyDefaults(
   property: Partial<Property> &
     Pick<Property, 'price' | 'title' | 'badge' | 'bedrooms' | 'bathrooms' | 'area' | 'image' | 'lat' | 'lng'>,
 ): Omit<Property, 'id'> {
+  const features = property.features ?? (
+    property.amenities ? featuresFromAmenities(property.amenities) : DEFAULT_FEATURES
+  )
+  const amenities =
+    property.amenities ?? amenitiesFromFeatures(features, DEFAULT_AMENITIES)
+
   return {
     ...property,
     type: property.type ?? 'Departamento',
     garages: property.garages ?? 1,
     description: property.description ?? DEFAULT_DESCRIPTION,
-    amenities: property.amenities ?? DEFAULT_AMENITIES,
+    features,
+    amenities,
     agent: property.agent ?? DEFAULT_AGENT,
     images: property.images ?? [property.image],
   }
@@ -65,7 +139,7 @@ export function withPropertyDefaults(
 
 export const properties: Property[] = [
   {
-    id: 1,
+    id: 'seed-1',
     price: '$179.000',
     title: 'Dpto. 2 Amb. Recoleta',
     badge: 'NUEVO',
@@ -87,11 +161,26 @@ export const properties: Property[] = [
     ],
     description:
       'Departamento luminoso en Recoleta con balcón, cocina integrada y excelente conectividad. A pasos de parques, cafés y transporte público.',
-    amenities: DEFAULT_AMENITIES,
+    features: {
+      patio: false,
+      pileta: false,
+      ascensor: true,
+      agua: true,
+      gas: true,
+      electricidad: true,
+    },
+    amenities: amenitiesFromFeatures({
+      patio: false,
+      pileta: false,
+      ascensor: true,
+      agua: true,
+      gas: true,
+      electricidad: true,
+    }, ['Seguridad 24/7']),
     agent: DEFAULT_AGENT,
   },
   {
-    id: 2,
+    id: 'seed-2',
     price: '$310.000',
     title: 'Loft Moderno Palermo',
     badge: 'EN ALQUILER',
@@ -113,11 +202,26 @@ export const properties: Property[] = [
     ],
     description:
       'Loft de diseño en Palermo con doble altura, amplios ventanales y terminaciones premium. Perfecto para quienes buscan estilo urbano y comodidad.',
-    amenities: DEFAULT_AMENITIES,
+    features: {
+      patio: false,
+      pileta: false,
+      ascensor: true,
+      agua: true,
+      gas: true,
+      electricidad: true,
+    },
+    amenities: amenitiesFromFeatures({
+      patio: false,
+      pileta: false,
+      ascensor: true,
+      agua: true,
+      gas: true,
+      electricidad: true,
+    }, ['Gimnasio']),
     agent: DEFAULT_AGENT,
   },
   {
-    id: 3,
+    id: 'seed-3',
     price: '$650.000',
     title: 'Casa Barrio Cerrado Belgrano',
     badge: 'EN VENTA',
@@ -139,11 +243,26 @@ export const properties: Property[] = [
     ],
     description:
       'Casa en barrio cerrado con jardín, parrilla y espacios familiares. Seguridad las 24 horas y amenities de club dentro del complejo.',
-    amenities: DEFAULT_AMENITIES,
+    features: {
+      patio: true,
+      pileta: true,
+      ascensor: false,
+      agua: true,
+      gas: true,
+      electricidad: true,
+    },
+    amenities: amenitiesFromFeatures({
+      patio: true,
+      pileta: true,
+      ascensor: false,
+      agua: true,
+      gas: true,
+      electricidad: true,
+    }, ['Seguridad 24/7', 'Gimnasio']),
     agent: DEFAULT_AGENT,
   },
   {
-    id: 4,
+    id: 'seed-4',
     price: '$520.000',
     title: 'Dpto. 4 Amb. Palermo Hollywood',
     badge: 'EN VENTA',
@@ -165,23 +284,56 @@ export const properties: Property[] = [
     ],
     description:
       'Amplio departamento de 4 ambientes en Palermo Hollywood con terraza, suite principal y cochera doble. Zona gastronómica y cultural.',
-    amenities: DEFAULT_AMENITIES,
+    features: {
+      patio: false,
+      pileta: true,
+      ascensor: true,
+      agua: true,
+      gas: true,
+      electricidad: true,
+    },
+    amenities: amenitiesFromFeatures({
+      patio: false,
+      pileta: true,
+      ascensor: true,
+      agua: true,
+      gas: true,
+      electricidad: true,
+    }),
     agent: DEFAULT_AGENT,
   },
 ]
 
 export function enrichProperty(
-  property: Partial<Property> & Pick<Property, 'id' | 'price' | 'title' | 'badge' | 'bedrooms' | 'bathrooms' | 'area' | 'image' | 'lat' | 'lng'>,
+  property: Partial<Property> &
+    Pick<Property, 'id' | 'price' | 'title' | 'badge' | 'bedrooms' | 'bathrooms' | 'area' | 'image' | 'lat' | 'lng'>,
   seedList: Property[] = properties,
 ): Property {
   const seed = seedList.find((item) => item.id === property.id)
-  return withPropertyDefaults({
+  const features =
+    property.features ??
+    seed?.features ??
+    (property.amenities
+      ? featuresFromAmenities(property.amenities)
+      : seed?.amenities
+        ? featuresFromAmenities(seed.amenities)
+        : DEFAULT_FEATURES)
+
+  const defaults = withPropertyDefaults({
     ...property,
     type: property.type ?? seed?.type,
     garages: property.garages ?? seed?.garages,
     description: property.description ?? seed?.description,
-    amenities: property.amenities ?? seed?.amenities,
+    features,
+    amenities:
+      property.amenities ??
+      amenitiesFromFeatures(features, seed?.amenities ?? DEFAULT_AMENITIES),
     agent: property.agent ?? seed?.agent,
     images: property.images ?? seed?.images ?? [property.image],
-  }) as Property
+  })
+
+  return {
+    ...defaults,
+    id: property.id,
+  }
 }

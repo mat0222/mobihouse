@@ -2,101 +2,176 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react'
-import { properties as initialProperties, enrichProperty, withPropertyDefaults, type Property } from '../data/properties'
+import { withPropertyDefaults, type Property } from '../data/properties'
+import { isFirebaseConfigured } from '../lib/firebase'
+import { useAuth } from './AuthContext'
+import {
+  createProperty,
+  deletePropertyFromFirestore,
+  seedPropertiesIfEmpty,
+  subscribeToProperties,
+  updatePropertyInFirestore,
+} from '../services/propertiesService'
 
 interface PropertiesContextValue {
   properties: Property[]
-  addProperty: (property: Parameters<typeof withPropertyDefaults>[0]) => void
-  updateProperty: (id: number, updates: Partial<Property>) => void
-  deleteProperty: (id: number) => void
-}
-
-const STORAGE_KEY = 'mobihouse-properties'
-
-const BROKEN_IMAGE_URL =
-  'https://images.unsplash.com/photo-1605276374101-dee2a0ed3cd6?w=500&h=300&fit=crop'
-
-function loadProperties(): Property[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return initialProperties
-
-    const stored = (JSON.parse(raw) as Property[]).map((property) =>
-      enrichProperty(property, initialProperties),
-    )
-    const fixed = stored.map((property) =>
-      property.image === BROKEN_IMAGE_URL
-        ? enrichProperty(
-            {
-              ...property,
-              image: initialProperties.find((p) => p.id === property.id)?.image ?? property.image,
-            },
-            initialProperties,
-          )
-        : property,
-    )
-
-    if (fixed.some((property, index) => property.image !== stored[index].image)) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(fixed))
-    }
-
-    return fixed
-  } catch {
-    return initialProperties
-  }
+  loading: boolean
+  error: string | null
+  configured: boolean
+  addProperty: (property: Parameters<typeof withPropertyDefaults>[0]) => Promise<void>
+  updateProperty: (id: string, updates: Partial<Property>) => Promise<void>
+  deleteProperty: (id: string) => Promise<void>
 }
 
 const PropertiesContext = createContext<PropertiesContextValue | null>(null)
 
-export function PropertiesProvider({ children }: { children: ReactNode }) {
-  const [properties, setProperties] = useState<Property[]>(loadProperties)
+function formatFirebaseError(error: unknown): string {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: string }).code)
+      : ''
+  const message = error instanceof Error ? error.message : 'No se pudo conectar con Firebase'
 
-  const persist = useCallback((next: Property[]) => {
-    setProperties(next)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-  }, [])
+  if (code.includes('permission-denied') || message.toLowerCase().includes('permission')) {
+    return 'No tenés permisos para esta acción. Si sos admin, verificá las reglas de Firestore y tu rol en la colección users.'
+  }
+
+  if (code.includes('not-found') || message.toLowerCase().includes('not found')) {
+    return 'No se encontró la base Firestore. Creá Firestore Database en la consola de Firebase.'
+  }
+
+  return message
+}
+
+export function PropertiesProvider({ children }: { children: ReactNode }) {
+  const configured = isFirebaseConfigured()
+  const { isAuthenticated, isAdmin, loading: authLoading } = useAuth()
+  const [properties, setProperties] = useState<Property[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(
+    configured
+      ? null
+      : 'Firebase no está configurado. Agregá las variables VITE_FIREBASE_* en tu archivo .env',
+  )
+
+  useEffect(() => {
+    if (!configured) {
+      setLoading(false)
+      return
+    }
+
+    if (authLoading) {
+      setLoading(true)
+      return
+    }
+
+    let unsubscribe: (() => void) | undefined
+    let cancelled = false
+
+    const start = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+
+        // Solo un admin puede sembrar datos iniciales
+        if (isAuthenticated && isAdmin) {
+          try {
+            await seedPropertiesIfEmpty()
+          } catch {
+            // Si el seed falla por permisos u otro motivo, igual intentamos leer.
+          }
+        }
+
+        if (cancelled) return
+
+        unsubscribe = subscribeToProperties(
+          (next) => {
+            if (cancelled) return
+            setProperties(next)
+            setLoading(false)
+            setError(null)
+          },
+          (subscribeError) => {
+            if (cancelled) return
+            setError(formatFirebaseError(subscribeError))
+            setLoading(false)
+          },
+        )
+      } catch (startError) {
+        if (cancelled) return
+        setError(formatFirebaseError(startError))
+        setLoading(false)
+      }
+    }
+
+    void start()
+
+    return () => {
+      cancelled = true
+      unsubscribe?.()
+    }
+  }, [configured, isAuthenticated, isAdmin, authLoading])
 
   const addProperty = useCallback(
-    (property: Parameters<typeof withPropertyDefaults>[0]) => {
-      persist([
-        ...properties,
-        enrichProperty({ ...withPropertyDefaults(property), id: Date.now() }, initialProperties),
-      ])
+    async (property: Parameters<typeof withPropertyDefaults>[0]) => {
+      try {
+        await createProperty(property)
+      } catch (err) {
+        throw new Error(formatFirebaseError(err))
+      }
     },
-    [properties, persist],
+    [],
   )
 
-  const updateProperty = useCallback(
-    (id: number, updates: Partial<Property>) => {
-      persist(
-        properties.map((p) =>
-          p.id === id ? enrichProperty({ ...p, ...updates }, initialProperties) : p,
-        ),
-      )
-    },
-    [properties, persist],
-  )
+  const updateProperty = useCallback(async (id: string, updates: Partial<Property>) => {
+    const payload = { ...updates }
+    if (updates.image && !updates.images) {
+      payload.images = [updates.image]
+    }
+    try {
+      await updatePropertyInFirestore(id, payload)
+    } catch (err) {
+      throw new Error(formatFirebaseError(err))
+    }
+  }, [])
 
-  const deleteProperty = useCallback(
-    (id: number) => {
-      persist(properties.filter((p) => p.id !== id))
-    },
-    [properties, persist],
-  )
+  const deleteProperty = useCallback(async (id: string) => {
+    try {
+      await deletePropertyFromFirestore(id)
+    } catch (err) {
+      throw new Error(formatFirebaseError(err))
+    }
+  }, [])
 
   const value = useMemo(
-    () => ({ properties, addProperty, updateProperty, deleteProperty }),
-    [properties, addProperty, updateProperty, deleteProperty],
+    () => ({
+      properties,
+      loading: loading || authLoading,
+      error,
+      configured,
+      addProperty,
+      updateProperty,
+      deleteProperty,
+    }),
+    [
+      properties,
+      loading,
+      authLoading,
+      error,
+      configured,
+      addProperty,
+      updateProperty,
+      deleteProperty,
+    ],
   )
 
   return (
-    <PropertiesContext.Provider value={value}>
-      {children}
-    </PropertiesContext.Provider>
+    <PropertiesContext.Provider value={value}>{children}</PropertiesContext.Provider>
   )
 }
 

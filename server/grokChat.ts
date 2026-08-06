@@ -23,6 +23,54 @@ export interface GrokChatResponse {
   reply: string
 }
 
+const MAX_MESSAGES = 20
+const MAX_MESSAGE_LENGTH = 2000
+const MAX_PROPERTIES = 30
+const MAX_USER_NAME = 80
+
+function sanitize(value: string, max: number): string {
+  return value.replace(/[<>]/g, '').trim().slice(0, max)
+}
+
+function validateRequest(request: GrokChatRequest): GrokChatRequest {
+  if (!Array.isArray(request.messages) || request.messages.length === 0) {
+    throw new Error('EMPTY_MESSAGES')
+  }
+
+  if (request.messages.length > MAX_MESSAGES) {
+    throw new Error('TOO_MANY_MESSAGES')
+  }
+
+  const messages = request.messages.map((message) => {
+    if (message.role !== 'user' && message.role !== 'assistant') {
+      throw new Error('INVALID_ROLE')
+    }
+    const content = sanitize(String(message.content ?? ''), MAX_MESSAGE_LENGTH)
+    if (!content) {
+      throw new Error('EMPTY_MESSAGES')
+    }
+    return { role: message.role, content }
+  })
+
+  const properties = Array.isArray(request.properties)
+    ? request.properties.slice(0, MAX_PROPERTIES).map((property) => ({
+        title: sanitize(String(property.title ?? ''), 120),
+        price: sanitize(String(property.price ?? ''), 40),
+        badge: sanitize(String(property.badge ?? ''), 40),
+        bedrooms: Number(property.bedrooms) || 0,
+        bathrooms: Number(property.bathrooms) || 0,
+        area: Number(property.area) || 0,
+        type: sanitize(String(property.type ?? ''), 40),
+      }))
+    : []
+
+  return {
+    messages,
+    userName: sanitize(String(request.userName ?? 'Usuario'), MAX_USER_NAME) || 'Usuario',
+    properties,
+  }
+}
+
 function buildSystemPrompt(userName: string, properties: PropertySummary[]) {
   const catalog =
     properties.length > 0
@@ -39,6 +87,7 @@ Respondé siempre en español rioplatense, de forma clara, amable y profesional.
 Ayudá al usuario a encontrar propiedades, comparar opciones, entender precios y coordinar visitas.
 Si no tenés un dato exacto, decilo con honestidad y ofrecé alternativas útiles.
 Mantené respuestas concisas (máximo 3 párrafos cortos).
+No inventes datos de contacto, precios ni direcciones que no estén en el catálogo.
 
 Usuario actual: ${userName}
 
@@ -55,9 +104,7 @@ export async function handleGrokChat(
     throw new Error('MISSING_API_KEY')
   }
 
-  if (!request.messages.length) {
-    throw new Error('EMPTY_MESSAGES')
-  }
+  const safeRequest = validateRequest(request)
 
   const response = await fetch('https://api.x.ai/v1/chat/completions', {
     method: 'POST',
@@ -68,15 +115,16 @@ export async function handleGrokChat(
     body: JSON.stringify({
       model,
       temperature: 0.7,
+      max_tokens: 600,
       messages: [
         {
           role: 'system',
           content: buildSystemPrompt(
-            request.userName ?? 'Usuario',
-            request.properties ?? [],
+            safeRequest.userName ?? 'Usuario',
+            safeRequest.properties ?? [],
           ),
         },
-        ...request.messages.map((message) => ({
+        ...safeRequest.messages.map((message) => ({
           role: message.role,
           content: message.content,
         })),
@@ -85,8 +133,7 @@ export async function handleGrokChat(
   })
 
   if (!response.ok) {
-    const errorBody = await response.text()
-    throw new Error(`GROK_API_ERROR:${response.status}:${errorBody}`)
+    throw new Error(`GROK_API_ERROR:${response.status}`)
   }
 
   const data = (await response.json()) as {
@@ -99,5 +146,5 @@ export async function handleGrokChat(
     throw new Error('EMPTY_REPLY')
   }
 
-  return { reply }
+  return { reply: sanitize(reply, 4000) }
 }
