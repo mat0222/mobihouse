@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
 import { Navbar } from '../components/Navbar'
 import { ChatWidget } from '../components/ChatWidget'
 import { useAuth } from '../contexts/AuthContext'
